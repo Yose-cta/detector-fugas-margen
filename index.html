@@ -264,27 +264,13 @@ input::placeholder{color:#4E5E70}
           <div class="leaks" id="portadaFugas"></div>
         </div>
 
-        <div class="panel flat" style="background:var(--panel2)">
-          <p style="margin:0"><strong>No te vamos a preguntar cuánto ganas.</strong> El resultado sale en horas, que es lo que de verdad se escapa. Al final, si quieres, pones lo que vale tu hora y ves el dinero. O no lo pones y te quedas con las horas.</p>
-        </div>
-
         <div class="consent" id="consentBox">
           <label>
             <input type="checkbox" id="okTerminos">
             <span class="box"></span>
-            <span>Acepto el tratamiento de mis datos y la política de privacidad.</span>
+            <span>Acepto el tratamiento de mis datos para recibir mi diagnóstico.</span>
           </label>
-          <div style="margin-top:11px;padding-left:30px">
-            <p class="note" style="margin:0 0 9px">Sin registro. Solo tu nombre, para poder entregarte el diagnóstico.</p>
-            <button type="button" class="lnk" id="verTerminos">Ver la información</button>
-          </div>
-          <div class="terms hidden" id="terminos">
-            <p style="margin:0 0 8px"><strong>Responsable:</strong> <span id="pvResp">.</span></p>
-            <p style="margin:0 0 8px"><strong>Finalidad:</strong> entregarte el resultado de este diagnóstico y, si lo pides, agendar tu sesión.</p>
-            <p style="margin:0 0 8px"><strong>Legitimación:</strong> tu consentimiento.</p>
-            <p style="margin:0 0 8px"><strong>Destinatarios:</strong> no se ceden a nadie.</p>
-            <p style="margin:0"><strong>Derechos:</strong> puedes acceder, rectificar o suprimir tus datos escribiendo a <span id="pvMail"></span>.</p>
-          </div>
+          <p class="note" style="margin:12px 0 0;padding-left:30px">Sin registro. Solo tu nombre, para poder entregarte el diagnóstico.</p>
         </div>
 
         <div>
@@ -329,8 +315,7 @@ const CONFIG = {
   autora:      "Yoselvia",
   agendaUrl:   "https://calendly.com/supcricionesyag/30min",
   sesionNombre:"Sesión de Dirección",
-  sesionDura:  "15 minutos",
-  emailPrivacidad:"supcricionesyag@gmail.com"   // el correo para ejercer derechos
+  sesionDura:  "15 minutos"
 };
 
 const DB = {
@@ -529,13 +514,7 @@ $("#btnEmpezar").addEventListener("click", () => {
   $("#aviso").textContent = "";
   state.i = 0; paso(1); pinta();
 });
-$("#pvResp").textContent = CONFIG.autora + ".";
-$("#pvMail").textContent = CONFIG.emailPrivacidad;
 $("#okTerminos").addEventListener("change", e => { $("#btnEmpezar").disabled = !e.target.checked; });
-$("#verTerminos").addEventListener("click", () => {
-  const oculto = $("#terminos").classList.toggle("hidden");
-  $("#verTerminos").textContent = oculto ? "Leerlos" : "Cerrar";
-});
 
 if (!DB.url || !DB.key){
   const n = $("#consentBox").querySelector(".note");

@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Calcula las cinco fugas que te hacen perder rentabilidad sin que aparezcan como un gasto, y cuanto te cuestan al mes.">
+<title>Detector de Fugas de Margen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#05070C; --bg2:#080C14;
+  --panel:#0B111A; --panel2:#101823; --panel3:#16202D;
+  --line:#17222F; --line2:#22303F;
+  --txt:#E6EDF3; --txt2:#AFC0D0; --muted:#7D8FA3;
+  --keep:#2BE8C8; --keep-d:#12A38C;
+  --leak:#FF7A45; --leak-hi:#FF4757;
+  --amber:#FFC14D;
+  --r:4px;
+  --fs:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --fm:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);color:var(--txt);font-family:var(--fs);font-size:16px;line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    linear-gradient(rgba(43,232,200,.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43,232,200,.028) 1px, transparent 1px),
+    radial-gradient(900px 520px at 88% -12%, rgba(43,232,200,.09), transparent 64%),
+    radial-gradient(700px 420px at -8% 12%, rgba(255,122,69,.06), transparent 62%);
+  background-size:52px 52px, 52px 52px, auto, auto;
+  background-attachment:fixed;
+}
+::selection{background:var(--keep);color:#04120F}
+:focus-visible{outline:1px solid var(--keep);outline-offset:3px}
+svg{max-width:100%}
+
+.shell{max-width:900px;margin:0 auto;padding:0 24px 120px}
+@media(max-width:640px){.shell{padding:0 16px 80px}}
+
+/* ---------- barra de progreso técnica ---------- */
+.rail{position:sticky;top:0;z-index:40;padding:14px 0 12px;background:rgba(5,7,12,.9);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.rail .lbl{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:9px;
+  font-family:var(--fm);font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+.rail .lbl b{color:var(--keep);font-weight:600}
+.rail .lbl span{color:var(--muted);font-weight:500}
+.rail .bar{display:flex;gap:3px}
+.rail .seg{flex:1;height:2px;background:var(--line2);transition:background .35s ease}
+.rail .seg.on{background:var(--keep);box-shadow:0 0 8px rgba(43,232,200,.6)}
+.rail.hide{opacity:0;pointer-events:none;height:0;padding:0;overflow:hidden;border:0}
+
+.step{display:none;padding-top:38px}
+.step.on{display:block}
+@media(prefers-reduced-motion:no-preference){
+  .step.on{animation:in .38s cubic-bezier(.2,.7,.3,1) both}
+}
+@keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ---------- tipografía ---------- */
+.tag{display:inline-block;font-family:var(--fm);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--keep);font-weight:600;margin-bottom:16px}
+.tag::before{content:"[ ";opacity:.5}
+.tag::after{content:" ]";opacity:.5}
+h1{font-family:var(--fs);font-weight:600;font-size:clamp(32px,6.4vw,54px);line-height:1.04;
+  letter-spacing:-.028em;text-wrap:balance;margin-bottom:18px}
+h1 em{font-style:normal;color:var(--leak)}
+h2{font-family:var(--fs);font-weight:600;font-size:clamp(23px,4vw,33px);line-height:1.14;
+  letter-spacing:-.022em;text-wrap:balance;margin-bottom:10px}
+h3{font-family:var(--fs);font-weight:600;font-size:19px;line-height:1.28;letter-spacing:-.012em;
+  text-wrap:balance;margin-bottom:8px}
+h4{font-family:var(--fm);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--keep);
+  font-weight:600;margin-bottom:12px}
+p{color:var(--txt2);margin-bottom:14px;max-width:64ch;font-weight:300}
+p:last-child{margin-bottom:0}
+p strong,li strong{color:var(--txt);font-weight:600}
+.lede{font-size:clamp(16.5px,2.1vw,19px);line-height:1.58;color:var(--txt2);max-width:60ch;font-weight:300}
+.note{font-family:var(--fm);font-size:11.5px;color:var(--muted);line-height:1.65;max-width:64ch;font-weight:400}
+.num{font-family:var(--fm);font-variant-numeric:tabular-nums}
+
+/* ---------- panel con marcas de esquina ---------- */
+.panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:26px 28px}
+@media(max-width:640px){.panel{padding:20px 17px}}
+.panel::before,.panel::after{content:"";position:absolute;width:9px;height:9px;pointer-events:none}
+.panel::before{top:-1px;left:-1px;border-top:1px solid var(--keep);border-left:1px solid var(--keep)}
+.panel::after{bottom:-1px;right:-1px;border-bottom:1px solid var(--keep);border-right:1px solid var(--keep)}
+.panel.leak::before{border-color:var(--leak)} .panel.leak::after{border-color:var(--leak)}
+.panel.flat::before,.panel.flat::after{display:none}
+.stack{display:flex;flex-direction:column;gap:34px}
+
+.quote{font-family:var(--fs);font-size:clamp(18px,2.6vw,25px);line-height:1.35;font-weight:500;
+  color:var(--txt);letter-spacing:-.018em;border-left:2px solid var(--keep);padding-left:22px;
+  max-width:56ch;text-wrap:balance}
+.quote.leak{border-color:var(--leak)}
+
+/* ---------- preguntas ---------- */
+.qhead{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.qhead .fuga{font-family:var(--fm);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--leak);font-weight:600}
+.qhead .n{font-family:var(--fm);font-size:10px;letter-spacing:.12em;color:var(--muted);font-weight:500}
+.qt{font-size:19px;font-weight:500;color:var(--txt);line-height:1.38;letter-spacing:-.014em;
+  margin-bottom:20px;max-width:52ch}
+.opts{display:flex;flex-direction:column;gap:9px}
+.opt{position:relative}
+.opt input{position:absolute;opacity:0;width:0;height:0}
+.opt span{display:flex;align-items:center;gap:13px;padding:15px 18px;border:1px solid var(--line2);
+  border-radius:var(--r);font-size:14.8px;font-weight:400;color:var(--txt2);cursor:pointer;
+  line-height:1.4;transition:all .16s ease;background:var(--panel2)}
+.opt span::before{content:"";flex:none;width:14px;height:14px;border:1px solid var(--line2);
+  border-radius:50%;transition:all .16s ease}
+.opt span:hover{border-color:var(--muted);color:var(--txt);background:var(--panel3)}
+.opt input:checked+span{border-color:var(--keep);color:var(--txt);background:rgba(43,232,200,.07)}
+.opt input:checked+span::before{border-color:var(--keep);background:var(--keep);
+  box-shadow:inset 0 0 0 3px var(--panel2)}
+.opt input:focus-visible+span{outline:1px solid var(--keep);outline-offset:3px}
+
+/* ---------- controles ---------- */
+.field{display:flex;flex-direction:column;gap:8px;max-width:360px}
+.field label{font-family:var(--fm);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);font-weight:600}
+input[type=text],input[type=number]{
+  width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:var(--r);
+  color:var(--txt);font-family:var(--fm);font-size:16px;font-weight:500;padding:13px 15px;
+  font-variant-numeric:tabular-nums;appearance:none}
+input:focus{border-color:var(--keep);outline:none;background:var(--panel3)}
+input::placeholder{color:#4E5E70}
+
+.acts{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.btn{font-family:var(--fm);font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:15px 30px;border-radius:var(--r);border:1px solid var(--keep);background:var(--keep);
+  color:#04120F;cursor:pointer;text-decoration:none;display:inline-block;text-align:center;
+  transition:box-shadow .18s ease,transform .18s ease}
+.btn:hover{box-shadow:0 0 24px rgba(43,232,200,.35);transform:translateY(-1px)}
+.btn.ghost{background:transparent;border-color:var(--line2);color:var(--txt2)}
+.btn.ghost:hover{border-color:var(--keep);color:var(--keep);box-shadow:none;transform:none}
+.btn.sm{padding:11px 20px;font-size:11.5px}
+.btn[disabled]{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* consentimiento */
+.consent label{display:grid;grid-template-columns:18px 1fr;gap:12px;align-items:start;cursor:pointer;
+  font-size:14px;color:var(--txt2);line-height:1.5;max-width:60ch;font-weight:300}
+.consent input{position:absolute;opacity:0;width:0;height:0}
+.consent .box{width:18px;height:18px;border:1px solid var(--line2);background:var(--panel2);
+  position:relative;transition:.16s;margin-top:2px}
+.consent label:hover .box{border-color:var(--muted)}
+.consent input:checked+.box{background:var(--keep);border-color:var(--keep)}
+.consent input:checked+.box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;
+  border:solid #04120F;border-width:0 2px 2px 0;transform:rotate(43deg)}
+.consent input:focus-visible+.box{outline:1px solid var(--keep);outline-offset:3px}
+.lnk{background:none;border:0;padding:0;font-family:var(--fm);font-size:11.5px;color:var(--keep);
+  cursor:pointer;text-decoration:underline;text-underline-offset:3px;letter-spacing:.04em}
+.terms{margin-top:16px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px 20px;font-size:13px;color:var(--muted);line-height:1.65;max-width:64ch;font-weight:300}
+.terms ul{margin:0;padding-left:18px}
+.terms li{margin-bottom:7px}
+.terms li:last-child{margin-bottom:0}
+.terms li::marker{color:var(--keep-d)}
+
+/* ---------- lectura principal ---------- */
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.readout>div{background:var(--panel);padding:22px 20px}
+.readout .k{font-family:var(--fm);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;margin-bottom:10px}
+.readout .v{font-family:var(--fm);font-size:clamp(30px,5.6vw,42px);font-weight:600;line-height:1;
+  letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--leak)}
+.readout .v small{font-size:.4em;font-weight:500;letter-spacing:.02em;margin-left:3px;color:var(--muted)}
+.readout .d{font-size:12.5px;color:var(--muted);margin-top:9px;line-height:1.5;font-weight:300}
+.readout .v.keep{color:var(--keep)}
+
+/* ---------- medidor de caudal ---------- */
+.meter{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:22px 20px 16px}
+.meter svg{display:block;width:100%;height:auto}
+.mlegend{display:flex;gap:20px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.mlegend div{display:flex;align-items:baseline;gap:8px;font-family:var(--fm);font-size:11px;
+  color:var(--muted);letter-spacing:.04em}
+.mlegend i{width:8px;height:8px;flex:none;display:inline-block}
+.mlegend b{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ---------- barras de fuga ---------- */
+.leaks{display:flex;flex-direction:column}
+.lk{padding:18px 0;border-bottom:1px solid var(--line)}
+.lk:last-child{border-bottom:0}
+.lk .top{display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-bottom:9px}
+.lk .nm{font-size:15.5px;font-weight:500;color:var(--txt);letter-spacing:-.01em}
+.lk .hr{font-family:var(--fm);font-size:17px;font-weight:600;color:var(--leak);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.lk .hr.ok{color:var(--keep)}
+.lk .tr{height:5px;background:var(--panel3);overflow:hidden;position:relative}
+.lk .fi{display:block;height:100%;background:linear-gradient(90deg,var(--leak),var(--leak-hi));
+  transition:width .8s cubic-bezier(.2,.75,.3,1)}
+.lk .fi.ok{background:linear-gradient(90deg,var(--keep-d),var(--keep))}
+.lk .why{font-size:13px;color:var(--muted);line-height:1.55;margin-top:10px;max-width:60ch;font-weight:300}
+
+/* ---------- convertidor ---------- */
+.conv{border:1px solid var(--keep);border-radius:var(--r);background:linear-gradient(160deg,rgba(43,232,200,.09),var(--panel) 62%);
+  padding:26px 28px}
+@media(max-width:640px){.conv{padding:20px 17px}}
+.conv .row{display:grid;grid-template-columns:minmax(0,190px) 1fr;gap:22px;align-items:end}
+@media(max-width:560px){.conv .row{grid-template-columns:1fr;gap:16px}}
+.conv .out{text-align:right}
+@media(max-width:560px){.conv .out{text-align:left}}
+.conv .out .k{font-family:var(--fm);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;margin-bottom:8px}
+.conv .out .v{font-family:var(--fm);font-size:clamp(32px,6.4vw,50px);font-weight:600;line-height:1;
+  letter-spacing:-.03em;color:var(--keep);font-variant-numeric:tabular-nums;word-break:break-all}
+.conv .sub{font-family:var(--fm);font-size:12px;color:var(--muted);margin-top:12px;letter-spacing:.03em}
+
+/* ---------- plan ---------- */
+.plan{display:flex;flex-direction:column}
+.plan .it{display:grid;grid-template-columns:34px 1fr;gap:16px;padding:18px 0;border-bottom:1px solid var(--line)}
+.plan .it:last-child{border-bottom:0}
+.plan .ix{font-family:var(--fm);font-size:12px;font-weight:600;color:var(--keep);letter-spacing:.06em;padding-top:3px}
+.plan .h{display:block;font-weight:500;color:var(--txt);font-size:16px;margin-bottom:5px;letter-spacing:-.012em}
+.plan .s{display:block;font-size:13.5px;color:var(--muted);line-height:1.6;font-weight:300}
+.chip{display:inline-block;font-family:var(--fm);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:600;padding:2px 7px;border:1px solid currentColor;margin-left:9px;vertical-align:2px}
+.chip.e{color:var(--leak)} .chip.o{color:var(--amber)} .chip.a{color:var(--keep)} .chip.d{color:#6BA8FF}
+
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line)}
+.mini>div{background:var(--panel);padding:16px 18px}
+.mini b{display:block;font-size:14px;color:var(--txt);margin-bottom:4px;font-weight:500}
+.mini span{display:block;font-size:12.5px;color:var(--muted);line-height:1.55;font-weight:300}
+
+.foot{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);font-family:var(--fm);
+  font-size:11.5px;color:var(--muted);line-height:1.7;font-weight:400}
+.foot b{color:var(--txt2);font-weight:600}
+.hidden{display:none !important}
+
+@media print{
+  body{background:#fff;color:#111;background-image:none}
+  .rail,.acts{display:none !important}
+  .panel,.readout>div,.meter,.mini>div{border-color:#ccc;background:#fff}
+  h1,h2,.readout .v{color:#111}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="rail hide" id="rail">
+    <div class="lbl"><b id="railName">Fuga 1</b><span id="railCount">01 / 10</span></div>
+    <div class="bar" id="railBar"></div>
+  </div>
+
+  <main>
+
+    <!-- ===================== PORTADA ===================== -->
+    <section class="step on" data-step="0">
+      <div class="stack">
+        <div>
+          <span class="tag">Diagnóstico · 10 preguntas · 3 minutos</span>
+          <h1>Detector de <em>Fugas de Margen</em></h1>
+          <p class="lede">Puedes cobrar bien y aun así perder dinero cada vez que entra un cliente nuevo. Hay pérdidas que nunca aparecen como un gasto: aparecen en minutos sueltos que nadie cuenta. Esto los cuenta.</p>
+        </div>
+
+        <div class="panel">
+          <h4>Las cinco fugas</h4>
+          <div class="leaks" id="portadaFugas"></div>
+        </div>
+
+        <div class="panel flat" style="background:var(--panel2)">
+          <p style="margin:0"><strong>No te vamos a preguntar cuánto ganas.</strong> El resultado sale en horas, que es lo que de verdad se escapa. Al final, si quieres, pones lo que vale tu hora y ves el dinero. O no lo pones y te quedas con las horas.</p>
+        </div>
+
+        <div class="consent" id="consentBox">
+          <label>
+            <input type="checkbox" id="okTerminos">
+            <span class="box"></span>
+            <span>Acepto los términos de uso.</span>
+          </label>
+          <div style="margin-top:11px;padding-left:30px">
+            <p class="note" style="margin:0 0 9px">Sin registro. Solo tu nombre, para poder entregarte el diagnóstico.</p>
+            <button type="button" class="lnk" id="verTerminos">Leerlos</button>
+          </div>
+          <div class="terms hidden" id="terminos">
+            <ul>
+              <li>Este diagnóstico es una herramienta de orientación sobre tu operación. No es asesoría financiera, contable ni legal, y sus resultados no garantizan ningún ingreso.</li>
+              <li>Las horas que calcula son una estimación a partir de tus respuestas, no una medición de tu agenda.</li>
+              <li>Se guardan tu nombre y tus respuestas. Nada más: ni email, ni teléfono, ni ninguna cifra de tu negocio.</li>
+              <li>Si al final pides la sesión, el email o el teléfono que escribas ahí se usan solo para agendarla.</li>
+              <li>Todo viaja cifrado y se guarda protegido. No se vende ni se comparte con nadie.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div>
+          <div class="field" style="margin-bottom:20px">
+            <label for="q-nombre">Tu nombre</label>
+            <input type="text" id="q-nombre" placeholder="Para tu informe" autocomplete="given-name">
+          </div>
+          <div class="acts">
+            <button class="btn" id="btnEmpezar" disabled>Comenzar diagnóstico</button>
+            <span class="note" id="aviso" style="margin:0"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== PREGUNTAS ===================== -->
+    <section class="step" data-step="1">
+      <div class="stack">
+        <div class="panel" id="preguntaBox"></div>
+        <div class="acts">
+          <button class="btn ghost sm" id="btnAtras">Atrás</button>
+          <button class="btn" id="btnSig" disabled>Siguiente</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== RESULTADO ===================== -->
+    <section class="step" data-step="2" id="out"></section>
+
+  </main>
+
+  <div class="foot">
+    <b>Sobre los números.</b> Esto no es contabilidad, es un instrumento de dirección. Las horas salen de rangos asociados a cada respuesta, no de medir tu agenda, así que son un orden de magnitud y no una cifra exacta. El total tampoco es la suma directa de las cinco: se descuenta el solape, porque la reunión extra es a la vez alcance y tiempo no facturable, y contarla dos veces infla la cifra. Están calculadas por lo bajo a propósito. Si aun así te parecen altas, la conversación interesante no es si el número es exacto: es por qué te incomoda.
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   CONFIGURACIÓN
+   ══════════════════════════════════════════════════════════ */
+const CONFIG = {
+  autora:      "Yoselvia",
+  agendaUrl:   "https://calendly.com/supcricionesyag/30min",
+  sesionNombre:"Sesión de Dirección",
+  sesionDura:  "15 minutos"
+};
+
+const DB = {
+  url: "https://gxrtcsuiebeqwtlnxhjy.supabase.co",
+  key: "sb_publishable_p8HxC7ceRiR4NN0bwWHGHQ_CaZPpUFS"
+};
+
+let RESP_ID = null;
+
+async function rpc(fn, body){
+  const r = await fetch(DB.url + "/rest/v1/rpc/" + fn, {
+    method:"POST",
+    headers:{"apikey":DB.key,"Authorization":"Bearer "+DB.key,"Content-Type":"application/json"},
+    body:JSON.stringify(body)
+  });
+  const txt = await r.text();
+  if (!r.ok){ let m = txt; try { m = JSON.parse(txt).message || txt; } catch(e){} throw new Error(m); }
+  return txt ? JSON.parse(txt) : null;
+}
+
+/* ══════════════════════════════════════════════════════════
+   LAS CINCO FUGAS Y LAS DIEZ PREGUNTAS
+   Cada fuga tiene dos preguntas. Cada respuesta puntúa 0, 1 o 2.
+   La suma (0 a 4) se traduce a un rango de horas por semana.
+   ══════════════════════════════════════════════════════════ */
+const FUGAS = [
+  {id:"alcance",  nm:"El alcance que se estira",  et:"Alcance",
+   des:"Trabajo que no estaba en el acuerdo y que entregas igual.",
+   horas:[0.5, 1, 2, 3, 4]},
+  {id:"retrabajo", nm:"Rehacer lo que ya estaba hecho", et:"Retrabajo",
+   des:"Rondas de revisión que nadie paga dos veces.",
+   horas:[0.5, 1, 1.5, 2.5, 3.5]},
+  {id:"nofact",   nm:"Horas que no factura nadie", et:"Tiempo no facturable",
+   des:"Administración, coordinación y seguimiento que no entran en ninguna factura.",
+   horas:[1.5, 2.5, 4, 6, 8]},
+  {id:"tools",    nm:"Herramientas que no sabes si sirven", et:"Herramientas",
+   des:"Cuotas que siguen saliendo del banco todos los meses.",
+   horas:null},
+  {id:"sistemas", nm:"Todo depende de ti",        et:"Sin sistemas",
+   des:"Sin plantillas ni procesos, cada proyecto se resuelve otra vez desde cero.",
+   horas:[0.5, 1, 2, 3, 4]}
+];
+
+const PREGUNTAS = [
+  {fuga:"alcance", t:"¿Cada cuánto te llega un hazme esto rapidito que no estaba en lo acordado?",
+   o:[{t:"Casi nunca. Se sabe dónde termina lo mío",v:0},
+      {t:"Según el cliente. Hay quien se estira más",v:1},
+      {t:"Todas las semanas. Ya cuento con ello",v:2}]},
+  {fuga:"alcance", t:"Antes de empezar, ¿el cliente aprueba por escrito qué entra y qué no entra?",
+   o:[{t:"Sí, siempre lo dejamos firmado",v:0},
+      {t:"Según el proyecto. A veces sí y a veces no",v:1},
+      {t:"No, funcionamos con lo que hablamos",v:2}]},
+
+  {fuga:"retrabajo", t:"En un proyecto normal, ¿cuántas veces acabas devolviendo algo corregido?",
+   o:[{t:"Una o dos, y cerramos",v:0},
+      {t:"Tres o cuatro",v:1},
+      {t:"Las que hagan falta, hasta que quede contento",v:2}]},
+  {fuga:"retrabajo", t:"¿Le dejas claro al cliente qué necesitas de él antes de arrancar?",
+   o:[{t:"Sí, no arranco sin tenerlo",v:0},
+      {t:"Cuando me acuerdo",v:1},
+      {t:"No, se lo voy pidiendo sobre la marcha",v:2}]},
+
+  {fuga:"nofact", t:"A la semana, ¿cuánto tiempo se te va en gestiones que no aparecen en ninguna factura?",
+   o:[{t:"Menos de tres horas",v:0},
+      {t:"Entre tres y ocho horas",v:1},
+      {t:"Más de ocho horas",v:2}]},
+  {fuga:"nofact", t:"¿Sabrías decir cuántas horas reales le has dedicado a cada cliente este mes?",
+   o:[{t:"Sí, lo llevo apuntado",v:0},
+      {t:"Más o menos, a ojo",v:1},
+      {t:"Ni idea. Nunca lo he contado",v:2}]},
+
+  {fuga:"tools", t:"¿Cuántas suscripciones de software se te cobran todos los meses?",
+   o:[{t:"Entre una y tres, las imprescindibles",v:0},
+      {t:"Entre cuatro y siete",v:1},
+      {t:"Ocho o más. He perdido la cuenta",v:2}]},
+  {fuga:"tools", t:"¿Podrías explicar en una frase para qué sirve cada una de ellas?",
+   o:[{t:"Sí, todas tienen su función",v:0},
+      {t:"Unas sí y otras no sabría",v:1},
+      {t:"No. Algunas las pago por inercia",v:2}]},
+
+  {fuga:"sistemas", t:"Si entrara alguien a ayudarte, ¿podría sacar adelante tu servicio principal sin ti al lado?",
+   o:[{t:"Sí, está todo documentado",v:0},
+      {t:"A medias. Tendría que ir detrás explicando",v:1},
+      {t:"No. Sin mí no sale",v:2}]},
+  {fuga:"sistemas", t:"Cuando entregas, ¿partes de algo ya montado o abres la página en blanco?",
+   o:[{t:"De plantillas, para casi todo",v:0},
+      {t:"Tengo algunas piezas hechas",v:1},
+      {t:"Cada proyecto lo armo desde cero",v:2}]}
+];
+
+/* El arreglo cambia según el hueco real. E, O, A y D son eliminar,
+   optimizar, automatizar y delegar: qué tipo de movimiento pide cada una. */
+const ARREGLOS = {
+  alcance:[
+    {c:"o", h:"Sostén lo que ya está escrito", s:"Tienes el documento y los límites. Si aun así se estira, el punto de fuga es el momento de recordarlo, no el papel."},
+    {c:"e", h:"Añade el fuera de alcance a tu propuesta", s:"Ya dices lo que entra. Falta la otra mitad, que es la que se estira: cinco líneas de lo que no incluye."},
+    {c:"e", h:"Escribe lo que NO incluye, y hazlo firmar", s:"Cinco líneas al final de tu propuesta. Es lo único que convierte un no incómodo en un ya estaba dicho."}
+  ],
+  retrabajo:[
+    {c:"o", h:"Tienes el proceso, vigila el arranque", s:"Con pocas rondas y brief claro, lo que queda suele ser expectativa mal fijada en la primera reunión."},
+    {c:"o", h:"Pon el brief antes de empezar, siempre", s:"A veces no basta. El retrabajo no nace en la entrega, nace en lo que no se preguntó al principio."},
+    {c:"e", h:"Define dos rondas y pide el brief por escrito", s:"Dos rondas, en la propuesta, y la tercera se cotiza. Sin número, las rondas son infinitas por diseño."}
+  ],
+  nofact:[
+    {c:"o", h:"Ya mides, ahora pon precio a lo que mides", s:"Sabes cuántas horas van. El siguiente paso no es recortarlas: es que aparezcan en la factura."},
+    {c:"a", h:"Mide una semana antes de decidir nada", s:"Apunta cada bloque durante siete días. Lo que no se mide se subestima siempre, y siempre por lo bajo."},
+    {c:"a", h:"Mide una semana, y luego reparte", s:"No sabes cuántas horas son, así que la cifra de arriba es la de menos. Siete días de registro y hablamos."}
+  ],
+  tools:[
+    {c:"o", h:"Revisa una vez al trimestre", s:"Tienes pocas y sabes para qué son. Basta con mirarlo cada tres meses y no acumular por inercia."},
+    {c:"e", h:"Cancela lo que no abriste este mes", s:"Sin plan de recuperarlo. Si no lo usaste en treinta días, no lo vas a usar en los siguientes treinta."},
+    {c:"e", h:"Haz la lista y corta la mitad", s:"Escribe todas y para qué sirve cada una. Las que no puedas justificar en una frase se van."}
+  ],
+  sistemas:[
+    {c:"a", h:"Documenta lo último que quede a mano", s:"Ya tienes casi todo. Lo que falta suele ser el arranque, que sigue siendo artesanal."},
+    {c:"a", h:"Junta tus piezas sueltas en un solo sitio", s:"Ya tienes los trozos. Falta ponerlos en orden para que sea un proceso y no un recuerdo."},
+    {c:"d", h:"Escribe el paso a paso de tu servicio", s:"Una tarde. Lo que ya resolviste no se vuelve a resolver, y es lo único que te deja soltar sin que baje la calidad."}
+  ]
+};
+const CHIPNM = {e:"Eliminar", o:"Optimizar", a:"Automatizar", d:"Delegar"};
+
+/* ══════════════════════════════════════════════════════════ */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const nf = new Intl.NumberFormat("es-ES");
+const fmtN = n => nf.format(Math.round(n));
+const fmtH = n => (Math.round(n*10)/10).toString().replace(".", ",");
+const esc_ = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const SEM = 4.333;
+
+const state = { i:0, resp:new Array(PREGUNTAS.length).fill(null) };
+
+/* ---------- portada: el listado de fugas ---------- */
+$("#portadaFugas").innerHTML = FUGAS.map(f => `
+  <div class="lk" style="padding:13px 0">
+    <div class="top" style="margin:0">
+      <span class="nm">${f.nm}</span>
+      <span class="hr" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">${f.et}</span>
+    </div>
+    <div class="why" style="margin-top:5px">${f.des}</div>
+  </div>`).join("");
+
+/* ---------- una pregunta cada vez ---------- */
+function pinta(){
+  const p = PREGUNTAS[state.i];
+  const f = FUGAS.find(x => x.id === p.fuga);
+  $("#preguntaBox").innerHTML = `
+    <div class="qhead">
+      <span class="fuga">${f.et}</span>
+      <span class="n">Pregunta ${String(state.i+1).padStart(2,"0")} de ${PREGUNTAS.length}</span>
+    </div>
+    <div class="qt">${p.t}</div>
+    <div class="opts">
+      ${p.o.map((o,i) => `<label class="opt">
+        <input type="radio" name="q" value="${i}"${state.resp[state.i] === i ? " checked" : ""}>
+        <span>${o.t}</span></label>`).join("")}
+    </div>`;
+  $$("#preguntaBox input[name=q]").forEach(el => el.addEventListener("change", () => {
+    state.resp[state.i] = parseInt(el.value,10);
+    $("#btnSig").disabled = false;
+    if (state.i < PREGUNTAS.length - 1) setTimeout(avanzar, 230);
+  }));
+  $("#btnSig").disabled = state.resp[state.i] === null;
+  $("#btnSig").textContent = state.i === PREGUNTAS.length - 1 ? "Ver mi resultado" : "Siguiente";
+  $("#btnAtras").textContent = state.i === 0 ? "Volver al inicio" : "Atrás";
+  $("#railBar").innerHTML = PREGUNTAS.map((_,i) => `<div class="seg${i <= state.i ? " on" : ""}"></div>`).join("");
+  $("#railName").textContent  = f.et;
+  $("#railCount").textContent = String(state.i+1).padStart(2,"0") + " / " + PREGUNTAS.length;
+  window.scrollTo({top:0, behavior:"instant"});
+}
+
+function avanzar(){
+  if (state.resp[state.i] === null) return;
+  if (state.i === PREGUNTAS.length - 1){ calcular(); return; }
+  state.i++; pinta();
+}
+function retroceder(){
+  if (state.i === 0){ paso(0); return; }
+  state.i--; pinta();
+}
+
+function paso(n){
+  $$(".step").forEach(s => s.classList.toggle("on", +s.dataset.step === n));
+  $("#rail").classList.toggle("hide", n !== 1);
+  window.scrollTo({top:0, behavior:"instant"});
+}
+
+$("#btnSig").addEventListener("click", avanzar);
+$("#btnAtras").addEventListener("click", retroceder);
+$("#btnEmpezar").addEventListener("click", () => {
+  if (!$("#q-nombre").value.trim()){
+    $("#q-nombre").focus();
+    $("#aviso").textContent = "Escribe tu nombre para poder ponerlo en tu informe.";
+    return;
+  }
+  $("#aviso").textContent = "";
+  state.i = 0; paso(1); pinta();
+});
+$("#okTerminos").addEventListener("change", e => { $("#btnEmpezar").disabled = !e.target.checked; });
+$("#verTerminos").addEventListener("click", () => {
+  const oculto = $("#terminos").classList.toggle("hidden");
+  $("#verTerminos").textContent = oculto ? "Leerlos" : "Cerrar";
+});
+
+if (!DB.url || !DB.key){
+  const n = $("#consentBox").querySelector(".note");
+  if (n) n.textContent = "No se guarda ni se envía nada. Todo se calcula en tu navegador.";
+}
+
+/* ══════════════════════════════════════════════════════════
+   CÁLCULO
+   ══════════════════════════════════════════════════════════ */
+function calcular(){
+  const punt = {};
+  FUGAS.forEach(f => punt[f.id] = 0);
+  PREGUNTAS.forEach((p,i) => { punt[p.fuga] += p.o[state.resp[i] ?? 0].v; });
+
+  const filas = FUGAS.filter(f => f.horas).map(f => ({
+    id:f.id, nm:f.nm, et:f.et, des:f.des,
+    punt: punt[f.id],
+    h: f.horas[punt[f.id]]
+  }));
+
+  /* Lo que no se mide se subestima: quien no lleva registro de horas
+     casi siempre declara menos de las que son. */
+  const sinRegistro = state.resp[5];
+  const fNo = filas.find(x => x.id === "nofact");
+  fNo.ajuste = sinRegistro === 2 ? 1.3 : sinRegistro === 1 ? 1.15 : 1;
+  fNo.h = Math.round(fNo.h * fNo.ajuste * 2) / 2;
+
+  /* Las fugas se solapan: la reunion extra es a la vez alcance y tiempo no
+     facturable, y el retrabajo se cuenta dos veces si ademas no hay proceso.
+     Sumar sin mas infla el total, asi que se descuenta ese solape. */
+  const graves = filas.filter(x => x.punt >= 3).length;
+  const solape = Math.min(0.2, 0.05 * graves);
+  const bruto  = filas.reduce((a,x) => a + x.h, 0);
+  const hSem   = Math.round(bruto * (1 - solape) * 2) / 2;
+  const hMes  = hSem * SEM;
+  const hAno  = hSem * 46;
+  const jorn  = hAno / 8;
+
+  /* Herramientas: no se pregunta dinero, se estima cuántas hay y
+     cuántas no tienen un porqué claro. */
+  const nTools = [2, 5.5, 9][state.resp[6] ?? 0];
+  const dudosa = [0, 0.45, 0.8][state.resp[7] ?? 0];
+  const tDudo  = Math.round(nTools * dudosa * 10) / 10;
+
+  const orden = filas.slice().sort((a,b) => b.h - a.h);
+  const madre = orden[0];
+
+  const r = {nombre:($("#q-nombre").value || "").trim(), punt, filas, orden, madre,
+             hSem, hMes, hAno, jorn, nTools, tDudo, sinRegistro, bruto, solape};
+  render(r);
+  guardar(r).then(() => { if (RESP_ID) $("#contacto").classList.remove("hidden"); });
+  paso(2);
+}
+
+async function guardar(r){
+  if (!DB.url || !DB.key) return;
+  const h = id => (r.filas.find(x => x.id === id) || {h:0}).h;
+  try {
+    RESP_ID = await rpc("rent_guardar", {
+      p_name: r.nombre,
+      p_h_alcance: h("alcance"), p_h_retrabajo: h("retrabajo"),
+      p_h_nofacturable: h("nofact"), p_h_sinproceso: h("sistemas"),
+      p_tools_total: Math.round(r.nTools), p_tools_dudosas: r.tDudo,
+      p_horas_fuga: +r.hSem.toFixed(1), p_horas_mes: +r.hMes.toFixed(1),
+      p_jornadas_ano: +r.jorn.toFixed(1),
+      p_fuga_madre: r.madre ? r.madre.et : null,
+      p_respuestas: state.resp,
+      p_user_agent: navigator.userAgent, p_referrer: document.referrer
+    });
+  } catch(e){ RESP_ID = null; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   EL MEDIDOR DE CAUDAL
+   Las horas entran por la izquierda. Cada fuga gotea. Lo que
+   queda a la derecha es lo que llega a una factura.
+   ══════════════════════════════════════════════════════════ */
+function medidor(r){
+  const W = 760, H = 260, X0 = 16, X1 = W - 16, YT = 44, GRUESO = 40;
+  const base = 40;                                  // semana de referencia
+  const total = Math.max(base, r.hSem + 8);
+  const esc = (X1 - X0) / total;
+  const util = Math.max(0, base - r.hSem);
+
+  let x = X0;
+  const grifos = r.filas.map(f => {
+    const w = f.h * esc;
+    const g = {f, x, w, cx: x + w/2};
+    x += w;
+    return g;
+  });
+  const finFugas = x;
+
+  return `
+<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Medidor: de ${base} horas de una semana, ${fmtH(r.hSem)} se escapan por las cinco fugas y quedan ${fmtH(util)}.">
+  <defs>
+    <linearGradient id="gLeak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FF7A45"/><stop offset="100%" stop-color="#FF4757"/>
+    </linearGradient>
+    <linearGradient id="gKeep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#12A38C"/><stop offset="100%" stop-color="#2BE8C8"/>
+    </linearGradient>
+  </defs>
+
+  <text x="${X0}" y="22" font-family="IBM Plex Mono,monospace" font-size="10.5" letter-spacing="2"
+        fill="#7D8FA3">ENTRAN ${base} H</text>
+  <text x="${X1}" y="22" text-anchor="end" font-family="IBM Plex Mono,monospace" font-size="10.5"
+        letter-spacing="2" fill="#2BE8C8">SALEN ${fmtH(util)} H</text>
+
+  <rect x="${X0}" y="${YT}" width="${X1-X0}" height="${GRUESO}" fill="#101823" stroke="#22303F"/>
+  <rect x="${finFugas}" y="${YT}" width="${Math.max(0, X1-finFugas)}" height="${GRUESO}" fill="url(#gKeep)" opacity=".9"/>
+  <rect x="${X0}" y="${YT}" width="${Math.max(0, finFugas-X0)}" height="${GRUESO}" fill="url(#gLeak)" opacity=".22"/>
+
+  ${grifos.map((g,i) => {
+    if (g.w < 1) return "";
+    const yb = YT + GRUESO, yfin = YT + GRUESO + 46 + (i%2)*30;
+    return `
+    <rect x="${g.x.toFixed(1)}" y="${YT}" width="${g.w.toFixed(1)}" height="${GRUESO}" fill="url(#gLeak)" opacity=".85"/>
+    <line x1="${g.x.toFixed(1)}" y1="${YT}" x2="${g.x.toFixed(1)}" y2="${yb}" stroke="#05070C" stroke-width="1.5"/>
+    <path d="M ${g.cx.toFixed(1)} ${yb} L ${g.cx.toFixed(1)} ${yfin-9}" stroke="#FF7A45" stroke-width="1.4" stroke-dasharray="3 4"/>
+    <circle cx="${g.cx.toFixed(1)}" cy="${yfin-4}" r="3.4" fill="#FF7A45"/>
+    <text x="${g.cx.toFixed(1)}" y="${yfin+15}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
+          font-size="12.5" font-weight="600" fill="#FF7A45">${fmtH(g.f.h)} h</text>
+    <text x="${g.cx.toFixed(1)}" y="${yfin+29}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
+          font-size="9" letter-spacing="1.2" fill="#7D8FA3">${g.f.et.toUpperCase()}</text>`;
+  }).join("")}
+
+  <line x1="${X0}" y1="${YT-8}" x2="${X0}" y2="${YT+GRUESO+8}" stroke="#22303F"/>
+  <line x1="${X1}" y1="${YT-8}" x2="${X1}" y2="${YT+GRUESO+8}" stroke="#22303F"/>
+</svg>`;
+}
+
+/* ══════════════════════════════════════════════════════════
+   INFORME
+   ══════════════════════════════════════════════════════════ */
+function arreglo(f){
+  const nivel = f.punt <= 1 ? 0 : f.punt <= 3 ? 1 : 2;
+  return ARREGLOS[f.id][nivel];
+}
+function arregloTools(r){
+  const p = r.punt.tools;
+  return ARREGLOS.tools[p <= 1 ? 0 : p <= 3 ? 1 : 2];
+}
+
+function render(r){
+  const util = Math.max(0, 40 - r.hSem);
+  const pct  = Math.min(100, Math.round(r.hSem / 40 * 100));
+  const mad  = r.madre, aM = arreglo(mad);
+
+  const lectura = pct >= 35
+    ? "Más de un tercio de tu semana se va antes de llegar a una factura. A ese ritmo, un cliente más no mejora nada: solo agranda el agujero."
+    : pct >= 20
+      ? "Uno de cada cinco días de tu semana se escapa sin que aparezca en ninguna cuenta. Es el rango donde casi todo el mundo está y nadie mira."
+      : "Tu operación está bastante bien tapada. Lo que queda no es urgente, pero es de lo más barato que vas a recuperar nunca.";
+
+  $("#out").innerHTML = `
+  <div class="stack">
+
+    <div>
+      <span class="tag">Resultado${r.nombre ? " · " + esc_(r.nombre) : ""}</span>
+      <h1>Se te escapan <em>${fmtH(r.hSem)} horas</em> cada semana.</h1>
+      <p class="lede">${lectura}</p>
+    </div>
+
+    <div class="meter">${medidor(r)}
+      <div class="mlegend">
+        <div><i style="background:linear-gradient(90deg,#FF7A45,#FF4757)"></i><span><b>${fmtH(r.hSem)} h</b> se escapan</span></div>
+        <div><i style="background:linear-gradient(90deg,#12A38C,#2BE8C8)"></i><span><b>${fmtH(util)} h</b> llegan a una factura</span></div>
+        <div><span>Sobre una semana de referencia de 40 h</span></div>
+      </div>
+    </div>
+
+    <div class="readout">
+      <div><div class="k">A la semana</div><div class="v">${fmtH(r.hSem)}<small>h</small></div>
+        <div class="d">el ${pct}% de una semana de 40</div></div>
+      <div><div class="k">Al mes</div><div class="v">${fmtH(r.hMes)}<small>h</small></div>
+        <div class="d">${fmtH(r.hMes/8)} jornadas completas</div></div>
+      <div><div class="k">Al año</div><div class="v">${fmtN(r.hAno)}<small>h</small></div>
+        <div class="d">${fmtN(r.jorn)} jornadas, sobre 46 semanas</div></div>
+    </div>
+
+    <div class="conv">
+      <h4>Ponle tu número</h4>
+      <p style="margin-bottom:20px">No te preguntamos cuánto ganas. Escribe lo que crees que vale una hora tuya y la cuenta se hace sola.</p>
+      <div class="row">
+        <div class="field" style="max-width:none">
+          <label for="c-hora">Lo que vale tu hora</label>
+          <input type="number" id="c-hora" min="0" step="5" placeholder="50" inputmode="numeric">
+        </div>
+        <div class="out">
+          <div class="k">Al año, sin cobrar</div>
+          <div class="v" id="convOut">—</div>
+        </div>
+      </div>
+      <div class="sub" id="convSub">Escribe una cifra y aparece el resto.</div>
+    </div>
+
+    <div>
+      <h2>Por dónde se va</h2>
+      <p class="lede" style="margin-bottom:22px">De más a menos, con lo que dijiste de cada una.</p>
+      <div class="panel">
+        <div class="leaks">
+          ${r.orden.map(f => { const a = arreglo(f); return `
+          <div class="lk">
+            <div class="top">
+              <span class="nm">${f.nm}</span>
+              <span class="hr${f.punt <= 1 ? " ok" : ""}">${fmtH(f.h)} h</span>
+            </div>
+            <span class="tr"><span class="fi${f.punt <= 1 ? " ok" : ""}" style="width:${Math.min(100, f.h/Math.max(...r.orden.map(x=>x.h))*100)}%"></span></span>
+            <div class="why">${f.des} ${f.id === "nofact" && r.sinRegistro === 2 ? "<strong>Y no llevas registro, así que esta es la que más se subestima: la cifra está ajustada al alza a propósito.</strong>" : ""}</div>
+          </div>`; }).join("")}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel leak">
+      <h4>La quinta fuga no se mide en horas</h4>
+      <h3 style="margin-bottom:10px">Pagas alrededor de ${fmtN(r.nTools)} herramientas${r.tDudo >= 0.5 ? `, y unas ${fmtH(r.tDudo)} no sabes si sirven` : ""}.</h3>
+      <p style="margin-bottom:0">${r.tDudo >= 0.5
+        ? "Esa parte sale del banco todos los meses sin discusión. Es la fuga más fácil de tapar de las cinco, porque se tapa una tarde y no requiere hablar con nadie."
+        : "Sabes para qué sirve cada una. Poca gente puede decir eso, y es la razón por la que esta fuga no te está costando nada."}</p>
+    </div>
+
+    <div class="quote leak">Un buen servicio no se basa en regalar más. Se basa en estar mejor diseñado.</div>
+
+    <div>
+      <span class="tag">Tu fuga madre</span>
+      <h2>${esc_(mad.nm)}</h2>
+      <p class="lede" style="margin-bottom:22px">${fmtH(mad.h)} h a la semana, ${fmtH(mad.h*SEM)} al mes. Es la más grande de las cinco y es por donde hay que empezar.</p>
+      <div class="panel">
+        <h4>${CHIPNM[aM.c]}</h4>
+        <h3 style="margin-bottom:9px">${aM.h}</h3>
+        <p style="margin-bottom:0">${aM.s}</p>
+      </div>
+      <div class="mini" style="margin-top:20px">
+        <div><b>Si la reduces a la mitad</b><span>Recuperas ${fmtH(mad.h/2)} h por semana, ${fmtN(mad.h/2*46)} h al año.</span></div>
+        <div><b>Clientes nuevos que hacen falta</b><span>Ninguno. Ese tiempo ya está dentro de tu operación.</span></div>
+        <div><b>Lo que cuesta arreglarlo</b><span>Un documento y una conversación incómoda de cinco minutos.</span></div>
+      </div>
+    </div>
+
+    <div>
+      <span class="tag">Qué hacer y en qué orden</span>
+      <h2>El orden no es por lo que molesta. Es por lo que cuesta.</h2>
+      <p class="lede" style="margin-bottom:22px">Empieza por la primera y solo por la primera. Las cinco a la vez es la forma más rápida de no arreglar ninguna.</p>
+      <div class="panel">
+        <div class="plan">
+          ${r.orden.map((f,i) => { const a = arreglo(f); return `
+          <div class="it">
+            <span class="ix">${String(i+1).padStart(2,"0")}</span>
+            <span>
+              <span class="h">${a.h}<span class="chip ${a.c}">${CHIPNM[a.c]}</span></span>
+              <span class="s">${esc_(f.et)}, ${fmtH(f.h)} h por semana. ${a.s}</span>
+            </span>
+          </div>`; }).join("")}
+          ${(() => { const a = arregloTools(r); return `
+          <div class="it">
+            <span class="ix">${String(r.orden.length+1).padStart(2,"0")}</span>
+            <span>
+              <span class="h">${a.h}<span class="chip ${a.c}">${CHIPNM[a.c]}</span></span>
+              <span class="s">Herramientas, alrededor de ${fmtN(r.nTools)}. ${a.s}</span>
+            </span>
+          </div>`; })()}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="contacto">
+      <span class="tag">Lo que este informe no puede hacer</span>
+      <h2 style="margin-bottom:12px">Ya sabes por dónde se va. Saberlo no lo tapa.</h2>
+      <p>Este diagnóstico te da el número y el orden. Lo que no puede hacer es escribir contigo las cinco líneas de lo que tu servicio no incluye, ni estar delante cuando llegue el primer hazme esto rapidito después de haberlas escrito.</p>
+      <p><strong>Eso se trabaja en una ${esc_(CONFIG.sesionNombre)} de ${esc_(CONFIG.sesionDura)}.</strong> Sales con la fuga madre taponada por escrito, no con una lista de intenciones.</p>
+      <div class="quote" style="margin:22px 0 6px">No cuesta dinero. Cuesta que llegues con tus horas delante.</div>
+      <p class="note" style="max-width:58ch">Las tuyas ya las tienes: ${fmtH(r.hSem)} h por semana, y sabes por cuál empezar.</p>
+
+      <div class="acts" style="margin-top:22px">
+        <button class="btn" id="btnBajar">Descargar mi diagnóstico</button>
+        <button class="btn ghost sm" id="btnImprimir">Imprimir</button>
+        <span class="note" id="bajarMsg" style="margin:0"></span>
+      </div>
+
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--line)">
+        <div class="acts hidden" id="agendaBox" style="margin-bottom:20px">
+          <a class="btn" id="btnAgenda" href="#" target="_blank" rel="noopener">Agendar mi ${esc_(CONFIG.sesionNombre)}</a>
+        </div>
+        <div id="pedirBox">
+          <p class="note" style="margin-bottom:14px">O dime dónde escribirte y te paso las horas libres.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
+            <div class="field" style="max-width:none">
+              <label for="c-email">Email</label>
+              <input type="text" id="c-email" autocomplete="email" inputmode="email" placeholder="tu@correo.com">
+            </div>
+            <div class="field" style="max-width:none">
+              <label for="c-handle">WhatsApp o Instagram</label>
+              <input type="text" id="c-handle" placeholder="+34 600 000 000" autocomplete="off">
+            </div>
+          </div>
+          <div class="acts" style="margin-top:18px">
+            <button class="btn" id="btnPedir">Quiero mi ${esc_(CONFIG.sesionNombre)}</button>
+            <span class="note" id="pedirMsg" style="margin:0"></span>
+          </div>
+          <p class="note" style="margin-top:14px">Solo se usa para agendar tu sesión.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="quote">Quizá no necesitas otro cliente. Necesitas ganar más con los que ya tienes.</div>
+
+    <div class="acts">
+      <button class="btn ghost sm" id="btnOtra">Volver a empezar</button>
+    </div>
+  </div>`;
+
+  /* convertidor en vivo */
+  const inp = $("#c-hora");
+  const conv = () => {
+    const v = parseFloat(inp.value);
+    if (!v || v <= 0){
+      $("#convOut").textContent = "—";
+      $("#convSub").textContent = "Escribe una cifra y aparece el resto.";
+      return;
+    }
+    $("#convOut").textContent = fmtN(r.hAno * v);
+    $("#convSub").textContent = "Al mes son " + fmtN(r.hMes * v) +
+      ". Por semana, " + fmtN(r.hSem * v) + ". Solo la fuga madre son " + fmtN(mad.h * 46 * v) + " al año.";
+  };
+  inp.addEventListener("input", conv);
+
+  if (CONFIG.agendaUrl){
+    $("#agendaBox").classList.remove("hidden");
+    $("#btnAgenda").href = CONFIG.agendaUrl;
+  }
+
+  $("#btnOtra").addEventListener("click", () => { state.i = 0; state.resp.fill(null); paso(0); });
+  $("#btnImprimir").addEventListener("click", () => window.print());
+  $("#btnBajar").addEventListener("click", () => {
+    try { bajar(r); } catch(e){ $("#bajarMsg").textContent = "No se pudo. Prueba con Imprimir."; return; }
+    $("#bajarMsg").textContent = "Guardado en tus descargas.";
+    if (RESP_ID) rpc("rent_descarga", {p_id: RESP_ID}).catch(() => {});
+  });
+
+  const pMsg = $("#pedirMsg"), pBtn = $("#btnPedir");
+  pBtn.addEventListener("click", async () => {
+    const email = $("#c-email").value.trim(), handle = $("#c-handle").value.trim();
+    if (!email && !handle){ pMsg.textContent = "Dime un email o un WhatsApp."; return; }
+    if (email && email.indexOf("@") < 1){ pMsg.textContent = "Ese email no parece completo."; return; }
+    if (!RESP_ID){ pMsg.textContent = "Sin conexión. Inténtalo en un momento."; return; }
+    pBtn.disabled = true; pMsg.textContent = "Enviando…";
+    try {
+      await rpc("rent_contacto", {p_id:RESP_ID, p_name:r.nombre, p_email:email, p_handle:handle});
+      $("#pedirBox").innerHTML = '<h3 style="margin-bottom:8px">Hecho. Te escribo con las horas.</h3>' +
+        '<p style="margin-bottom:0">Llega con tus números delante y empezamos en el minuto uno.</p>';
+    } catch(e){ pBtn.disabled = false; pMsg.textContent = "No se pudo enviar. Inténtalo otra vez."; }
+  });
+
+  if (window.matchMedia && !window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    const barras = $$("#out .lk .fi").map(e => [e, e.style.width]);
+    barras.forEach(([e]) => e.style.width = "0%");
+    requestAnimationFrame(() => requestAnimationFrame(() => barras.forEach(([e,w]) => e.style.width = w)));
+  }
+}
+
+/* El informe se lo lleva ella: un HTML suelto, con su diseño y sin conexión. */
+function bajar(r){
+  const copia = $("#out").cloneNode(true);
+  const t = copia.querySelector("#contacto"); if (t) t.remove();
+  copia.querySelectorAll(".acts").forEach(e => e.remove());
+  const conv = copia.querySelector(".conv"); if (conv) conv.remove();
+  const fuentes = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?' +
+    'family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap">';
+  const doc = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1"><title>Mis fugas de margen' +
+    (r.nombre ? " · " + esc_(r.nombre) : "") + '</title>' + fuentes +
+    document.querySelector("style").outerHTML +
+    '</head><body><div class="shell"><section class="step on">' +
+    copia.innerHTML + '</section></div></body></html>';
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([doc], {type:"text/html;charset=utf-8"}));
+  a.download = "mis-fugas-de-margen" +
+    (r.nombre ? "-" + r.nombre.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") : "") + ".html";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+</script>
+</body>
+</html>

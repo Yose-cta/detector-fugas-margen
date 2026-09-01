@@ -272,20 +272,18 @@ input::placeholder{color:#4E5E70}
           <label>
             <input type="checkbox" id="okTerminos">
             <span class="box"></span>
-            <span>Acepto los términos de uso.</span>
+            <span>Acepto el tratamiento de mis datos y la política de privacidad.</span>
           </label>
           <div style="margin-top:11px;padding-left:30px">
             <p class="note" style="margin:0 0 9px">Sin registro. Solo tu nombre, para poder entregarte el diagnóstico.</p>
-            <button type="button" class="lnk" id="verTerminos">Leerlos</button>
+            <button type="button" class="lnk" id="verTerminos">Ver la información</button>
           </div>
           <div class="terms hidden" id="terminos">
-            <ul>
-              <li>Este diagnóstico es una herramienta de orientación sobre tu operación. No es asesoría financiera, contable ni legal, y sus resultados no garantizan ningún ingreso.</li>
-              <li>Las horas que calcula son una estimación a partir de tus respuestas, no una medición de tu agenda.</li>
-              <li>Se guardan tu nombre y tus respuestas. Nada más: ni email, ni teléfono, ni ninguna cifra de tu negocio.</li>
-              <li>Si al final pides la sesión, el email o el teléfono que escribas ahí se usan solo para agendarla.</li>
-              <li>Todo viaja cifrado y se guarda protegido. No se vende ni se comparte con nadie.</li>
-            </ul>
+            <p style="margin:0 0 8px"><strong>Responsable:</strong> <span id="pvResp">.</span></p>
+            <p style="margin:0 0 8px"><strong>Finalidad:</strong> entregarte el resultado de este diagnóstico y, si lo pides, agendar tu sesión.</p>
+            <p style="margin:0 0 8px"><strong>Legitimación:</strong> tu consentimiento.</p>
+            <p style="margin:0 0 8px"><strong>Destinatarios:</strong> no se ceden a nadie.</p>
+            <p style="margin:0"><strong>Derechos:</strong> puedes acceder, rectificar o suprimir tus datos escribiendo a <span id="pvMail"></span>.</p>
           </div>
         </div>
 
@@ -318,9 +316,7 @@ input::placeholder{color:#4E5E70}
 
   </main>
 
-  <div class="foot">
-    <b>Sobre los números.</b> Esto no es contabilidad, es un instrumento de dirección. Las horas salen de rangos asociados a cada respuesta, no de medir tu agenda, así que son un orden de magnitud y no una cifra exacta. El total tampoco es la suma directa de las cinco: se descuenta el solape, porque la reunión extra es a la vez alcance y tiempo no facturable, y contarla dos veces infla la cifra. Están calculadas por lo bajo a propósito. Si aun así te parecen altas, la conversación interesante no es si el número es exacto: es por qué te incomoda.
-  </div>
+
 </div>
 
 <script>
@@ -333,7 +329,8 @@ const CONFIG = {
   autora:      "Yoselvia",
   agendaUrl:   "https://calendly.com/supcricionesyag/30min",
   sesionNombre:"Sesión de Dirección",
-  sesionDura:  "15 minutos"
+  sesionDura:  "15 minutos",
+  emailPrivacidad:"supcricionesyag@gmail.com"   // el correo para ejercer derechos
 };
 
 const DB = {
@@ -532,6 +529,8 @@ $("#btnEmpezar").addEventListener("click", () => {
   $("#aviso").textContent = "";
   state.i = 0; paso(1); pinta();
 });
+$("#pvResp").textContent = CONFIG.autora + ".";
+$("#pvMail").textContent = CONFIG.emailPrivacidad;
 $("#okTerminos").addEventListener("change", e => { $("#btnEmpezar").disabled = !e.target.checked; });
 $("#verTerminos").addEventListener("click", () => {
   const oculto = $("#terminos").classList.toggle("hidden");
